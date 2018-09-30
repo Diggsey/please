@@ -1,4 +1,6 @@
 language: rust
+rust:
+  - beta
 after_success: |
     cargo doc \
     && echo '<meta http-equiv=refresh content=0;url=please/index.html>' > target/doc/index.html && \
