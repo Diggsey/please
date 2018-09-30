@@ -4,6 +4,7 @@ rust:
 env:
   global:
     - DATABASE_URL=postgres://postgres:@localhost/please
+    - RUST_BACKTRACE=1
 services:
   - postgresql
 before_script:

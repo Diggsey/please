@@ -392,7 +392,7 @@ mod tests {
         type Error = diesel::ConnectionError;
 
         fn get(&self) -> Result<PgConnection, Self::Error> {
-            dotenv::dotenv().unwrap();
+            dotenv::dotenv().ok();
             PgConnection::establish(&env::var("DATABASE_URL").unwrap())
         }
     }
