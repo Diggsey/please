@@ -1,6 +1,14 @@
 language: rust
 rust:
   - beta
+env:
+  global:
+    - DATABASE_URL=postgres://postgres:@localhost/please
+services:
+  - postgresql
+before_script:
+  - cargo install diesel_cli
+  - diesel setup
 after_success: |
     cargo doc \
     && echo '<meta http-equiv=refresh content=0;url=please/index.html>' > target/doc/index.html && \
