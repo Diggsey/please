@@ -10,9 +10,11 @@
 //! it exports its own migrations. To manage migrations of third-party
 //! crates you can install the `diesel-setup-deps` tool:
 //! 
-//!     cargo install diesel-setup-deps
-//!     diesel setup
-//!     diesel-setup-deps
+//! ```ignore
+//! cargo install diesel-setup-deps
+//! diesel setup
+//! diesel-setup-deps
+//! ```
 //! 
 //! The necessary migrations will be automatically added to your diesel
 //! migrations directory, and these should be committed to version
@@ -32,28 +34,34 @@
 //! 
 //! This operation can be implemented as a single function:
 //! 
-//!     fn generate_report(
-//!         connection_pool: Arc<ConnectionPool>,
-//!         report_id: i32
-//!     ) -> PleaseResult<ConnectionPoolError> {
+//! ```ignore
+//! fn generate_report(
+//!     connection_pool: Arc<ConnectionPool>,
+//!     report_id: i32
+//! ) -> PleaseResult<ConnectionPoolError> {
+//! ```
 //! 
 //! First we obtain a handle to represent our operation:
 //! 
-//!         let mut handle = PleaseHandle::new_with_cleanup(
-//!             connection_pool, "generating report"
-//!         )?;
+//! ```ignore
+//!     let mut handle = PleaseHandle::new_with_cleanup(
+//!         connection_pool, "generating report"
+//!     )?;
+//! ```
 //! 
 //! Next we store our handle's ID in the reports table:
 //! 
-//!         handle.transaction(|conn, handle_id| {
-//!             diesel::update(
-//!                 reports::table
-//!                     .filter(reports::id.eq(report_id))
-//!                     .filter(reports::operation_id.is_null())
-//!             )
-//!             .set(reports::operation_id.eq(Some(handle_id)))
-//!             .execute(conn)
-//!         })?;
+//! ```ignore
+//!     handle.transaction(|conn, handle_id| {
+//!         diesel::update(
+//!             reports::table
+//!                 .filter(reports::id.eq(report_id))
+//!                 .filter(reports::operation_id.is_null())
+//!         )
+//!         .set(reports::operation_id.eq(Some(handle_id)))
+//!         .execute(conn)
+//!     })?;
+//! ```
 //! 
 //! Importantly, we fail if the operation ID is already set.
 //! 
@@ -64,18 +72,20 @@
 //! 
 //! When we have our result, we simply save it back, and close the handle:
 //! 
-//!         handle.transaction(|conn, handle_id| {
-//!             diesel::update(
-//!                 reports::table
-//!                     .filter(reports::id.eq(report_id))
-//!             )
-//!             .set(reports::output.eq(Some(result)))
-//!             .execute(conn)
-//!         })?;
+//! ```ignore
+//!     handle.transaction(|conn, handle_id| {
+//!         diesel::update(
+//!             reports::table
+//!                 .filter(reports::id.eq(report_id))
+//!         )
+//!         .set(reports::output.eq(Some(result)))
+//!         .execute(conn)
+//!     })?;
 //! 
-//!         handle.close()?;
-//!         Ok(())
-//!     })
+//!     handle.close()?;
+//!     Ok(())
+//! })
+//! ```
 //! 
 //! The handle will be automatically closed if it is instead allowed to
 //! fall out of scope, but errors will be ignored.
