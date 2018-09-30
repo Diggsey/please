@@ -1,10 +1,10 @@
 [package]
 name = "please"
-version = "0.1.1"
+version = "0.1.2"
 authors = ["Diggory Blake <diggsey@googlemail.com>"]
 edition = "2018"
 description = "Foundation for implementing long-lived database locks"
-documentation = "https://docs.rs/please"
+documentation = "https://diggsey.github.io/please/please/index.html"
 repository = "https://github.com/Diggsey/please"
 license = "MIT OR Apache-2.0"
 

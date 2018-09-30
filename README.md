@@ -6,4 +6,4 @@ long-running operations, and can be used as the basis for implementing
 exclusive locking behaviour when a lock may be held for too long for
 transaction-level locking to be acceptable.
 
-[Documentation](https://docs.rs/please)
+[Documentation](https://diggsey.github.io/please/please/index.html)
