@@ -1,0 +1,145 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="API documentation for the Rust `please` crate."><meta name="keywords" content="rust, rustlang, rust-lang, please"><title>please - Rust</title><link rel="stylesheet" type="text/css" href="../normalize.css"><link rel="stylesheet" type="text/css" href="../rustdoc.css" id="mainThemeStyle"><link rel="stylesheet" type="text/css" href="../dark.css"><link rel="stylesheet" type="text/css" href="../light.css" id="themeStyle"><script src="../storage.js"></script></head><body class="rustdoc mod"><!--[if lte IE 8]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="sidebar"><div class="sidebar-menu">&#9776;</div><p class='location'>Crate please</p><div class="sidebar-elems"><div class="block items"><ul><li><a href="#structs">Structs</a></li><li><a href="#enums">Enums</a></li><li><a href="#traits">Traits</a></li><li><a href="#types">Type Definitions</a></li></ul></div><p class='location'></p><script>window.sidebarCurrent = {name: 'please', ty: 'mod', relpath: '../'};</script></div></nav><div class="theme-picker"><button id="theme-picker" aria-label="Pick another theme!"><img src="../brush.svg" width="18" alt="Pick another theme!"></button><div id="theme-choices"></div></div><script src="../theme.js"></script><nav class="sub"><form class="search-form js-only"><div class="search-container"><input class="search-input" name="search" autocomplete="off" placeholder="Click or press ‘S’ to search, ‘?’ for more options…" type="search"><a id="settings-menu" href="../settings.html"><img src="../wheel.svg" width="18" alt="Change settings"></a></div></form></nav><section id="main" class="content"><h1 class='fqn'><span class='out-of-band'><span id='render-detail'><a id="toggle-all-docs" href="javascript:void(0)" title="collapse all docs">[<span class='inner'>&#x2212;</span>]</a></span><a class='srclink' href='../src/please/lib.rs.html#1-503' title='goto source code'>[src]</a></span><span class='in-band'>Crate <a class="mod" href=''>please</a></span></h1><div class='docblock'><p>Crate for identifying and expiring long-running database activities.
+The core primitive provided by the crate is a <code>PleaseHandle</code>. These
+handles represent long-running operations, and can be used as the
+basis for implementing exclusive locking behaviour when a lock may
+be held for too long for transaction-level locking to be acceptable.</p>
+<h1 id="setup" class="section-header"><a href="#setup">Setup</a></h1>
+<p>This crate requires that certain tables exist, and for this reason
+it exports its own migrations. To manage migrations of third-party
+crates you can install the <code>diesel-setup-deps</code> tool:</p>
+
+<div class='information'><div class='tooltip ignore'>ⓘ<span class='tooltiptext'>This example is not tested</span></div></div><pre class="rust rust-example-rendered ignore">
+<span class="ident">cargo</span> <span class="ident">install</span> <span class="ident">diesel</span><span class="op">-</span><span class="ident">setup</span><span class="op">-</span><span class="ident">deps</span>
+<span class="ident">diesel</span> <span class="ident">setup</span>
+<span class="ident">diesel</span><span class="op">-</span><span class="ident">setup</span><span class="op">-</span><span class="ident">deps</span></pre>
+<p>The necessary migrations will be automatically added to your diesel
+migrations directory, and these should be committed to version
+control along with your other migrations.</p>
+<h1 id="usage" class="section-header"><a href="#usage">Usage</a></h1>
+<p>To begin with, you will typically have a long-running operation
+which you want to have exclusive access to some part of your database.</p>
+<p>A good example might be generating a report: this operation will process
+large amounts of data, and then save the result to the <code>output</code> field
+in our <code>reports</code> table. We want the operation to have exclusive access
+to the <code>output</code> field, so that nobody else tries to generate the report
+whilst we are running, and we also may want to track whether a report
+is in progress or not.</p>
+<p>This operation can be implemented as a single function:</p>
+
+<div class='information'><div class='tooltip ignore'>ⓘ<span class='tooltiptext'>This example is not tested</span></div></div><pre class="rust rust-example-rendered ignore">
+<span class="kw">fn</span> <span class="ident">generate_report</span>(
+    <span class="ident">connection_pool</span>: <span class="ident">Arc</span><span class="op">&lt;</span><span class="ident">ConnectionPool</span><span class="op">&gt;</span>,
+    <span class="ident">report_id</span>: <span class="ident">i32</span>
+) <span class="op">-&gt;</span> <span class="ident">PleaseResult</span><span class="op">&lt;</span><span class="ident">ConnectionPoolError</span><span class="op">&gt;</span> {</pre>
+<p>First we obtain a handle to represent our operation:</p>
+
+<div class='information'><div class='tooltip ignore'>ⓘ<span class='tooltiptext'>This example is not tested</span></div></div><pre class="rust rust-example-rendered ignore">
+    <span class="kw">let</span> <span class="kw-2">mut</span> <span class="ident">handle</span> <span class="op">=</span> <span class="ident">PleaseHandle</span>::<span class="ident">new_with_cleanup</span>(
+        <span class="ident">connection_pool</span>, <span class="string">&quot;generating report&quot;</span>
+    )<span class="question-mark">?</span>;</pre>
+<p>Next we store our handle's ID in the reports table:</p>
+
+<div class='information'><div class='tooltip ignore'>ⓘ<span class='tooltiptext'>This example is not tested</span></div></div><pre class="rust rust-example-rendered ignore">
+    <span class="ident">handle</span>.<span class="ident">transaction</span>(<span class="op">|</span><span class="ident">conn</span>, <span class="ident">handle_id</span><span class="op">|</span> {
+        <span class="ident">diesel</span>::<span class="ident">update</span>(
+            <span class="ident">reports</span>::<span class="ident">table</span>
+                .<span class="ident">filter</span>(<span class="ident">reports</span>::<span class="ident">id</span>.<span class="ident">eq</span>(<span class="ident">report_id</span>))
+                .<span class="ident">filter</span>(<span class="ident">reports</span>::<span class="ident">operation_id</span>.<span class="ident">is_null</span>())
+        )
+        .<span class="ident">set</span>(<span class="ident">reports</span>::<span class="ident">operation_id</span>.<span class="ident">eq</span>(<span class="prelude-val">Some</span>(<span class="ident">handle_id</span>)))
+        .<span class="ident">execute</span>(<span class="ident">conn</span>)
+    })<span class="question-mark">?</span>;</pre>
+<p>Importantly, we fail if the operation ID is already set.</p>
+<p>Now, we can perform whatever work is required to generate the report.
+If the report may take longer than the operation timout, then you can
+either increase the timeout, or call <code>handle.refresh()</code> every so often
+to ensure the timeout is never reached.</p>
+<p>When we have our result, we simply save it back, and close the handle:</p>
+
+<div class='information'><div class='tooltip ignore'>ⓘ<span class='tooltiptext'>This example is not tested</span></div></div><pre class="rust rust-example-rendered ignore">
+    <span class="ident">handle</span>.<span class="ident">transaction</span>(<span class="op">|</span><span class="ident">conn</span>, <span class="ident">handle_id</span><span class="op">|</span> {
+        <span class="ident">diesel</span>::<span class="ident">update</span>(
+            <span class="ident">reports</span>::<span class="ident">table</span>
+                .<span class="ident">filter</span>(<span class="ident">reports</span>::<span class="ident">id</span>.<span class="ident">eq</span>(<span class="ident">report_id</span>))
+        )
+        .<span class="ident">set</span>(<span class="ident">reports</span>::<span class="ident">output</span>.<span class="ident">eq</span>(<span class="prelude-val">Some</span>(<span class="ident">result</span>)))
+        .<span class="ident">execute</span>(<span class="ident">conn</span>)
+    })<span class="question-mark">?</span>;
+ 
+    <span class="ident">handle</span>.<span class="ident">close</span>()<span class="question-mark">?</span>;
+    <span class="prelude-val">Ok</span>(())
+})</pre>
+<p>The handle will be automatically closed if it is instead allowed to
+fall out of scope, but errors will be ignored.</p>
+<h1 id="database-schema" class="section-header"><a href="#database-schema">Database Schema</a></h1>
+<p>In the above example, it is expected that the <code>reports::operation_id</code> column
+is a nullable integer column, and a foreign key into the <code>please_ids</code>
+table.</p>
+<p>Ideally you should set up cascade rules such that when rows are deleted
+from the <code>please_ids</code> table, corresponding reports have their <code>operation_id</code>
+column set to null.</p>
+<h1 id="operation-timeouts" class="section-header"><a href="#operation-timeouts">Operation Timeouts</a></h1>
+<p>If no activity happens on a <code>PleaseHandle</code> for longer than the <em>operation timeout</em>
+then the handle may expire. This will happen automatically whenever
+<code>perform_cleanup</code> or <code>new_with_cleanup</code> is called from another thread or another
+database client.</p>
+<p>Calling the methods <code>transaction</code> or <code>refresh</code> are considered activity, and will
+prevent the handle from expiring, assuming it has not already expired. Both methods
+will fail-fast if the operation has already expired. In this case you should cancel
+any work you were doing as part of the operation.</p>
+<p>The operation timeout is controlled by a database function: <code>please_timeout()</code>.
+To change the timeout, use a migration to alter this function and return a
+different value. It is not currently possible to change the timeout on a per-operation
+basis.</p>
+<p>It is recommended to set the operation timeout to as short a time as possible, so
+that if your application crashes, is terminated unexpectedly, or simply loses
+connectivity to the database, any locks it might have held are released as
+soon as possible.</p>
+<p>The operation timeout is by default set to <em>two minutes</em>.</p>
+</div><h2 id='structs' class='section-header'><a href="#structs">Structs</a></h2>
+<table>
+                       <tr class=' module-item'>
+                           <td><a class="struct" href="struct.ExpiredId.html"
+                                  title='struct please::ExpiredId'>ExpiredId</a></td>
+                           <td class='docblock-short'>
+                                <p>Expired ID, only used for logging/debug purposes</p>
+
+                           </td>
+                       </tr>
+                       <tr class=' module-item'>
+                           <td><a class="struct" href="struct.PleaseHandle.html"
+                                  title='struct please::PleaseHandle'>PleaseHandle</a></td>
+                           <td class='docblock-short'>
+                                <p>This handle identifies a long-running operation using a unique integer.</p>
+
+                           </td>
+                       </tr></table><h2 id='enums' class='section-header'><a href="#enums">Enums</a></h2>
+<table>
+                       <tr class=' module-item'>
+                           <td><a class="enum" href="enum.PleaseError.html"
+                                  title='enum please::PleaseError'>PleaseError</a></td>
+                           <td class='docblock-short'>
+                                <p>Error type returned by this library</p>
+
+                           </td>
+                       </tr></table><h2 id='traits' class='section-header'><a href="#traits">Traits</a></h2>
+<table>
+                       <tr class=' module-item'>
+                           <td><a class="trait" href="trait.ConnectionProvider.html"
+                                  title='trait please::ConnectionProvider'>ConnectionProvider</a></td>
+                           <td class='docblock-short'>
+                                <p>Trait for types providing database connections. This is typically
+implemented by an <code>Arc&lt;ConnectionPool&gt;</code> or functionally equivalent
+type.</p>
+
+                           </td>
+                       </tr></table><h2 id='types' class='section-header'><a href="#types">Type Definitions</a></h2>
+<table>
+                       <tr class=' module-item'>
+                           <td><a class="type" href="type.PleaseResult.html"
+                                  title='type please::PleaseResult'>PleaseResult</a></td>
+                           <td class='docblock-short'>
+                                <p>Convenient alias for <code>Result</code> types returned from this library.</p>
+
+                           </td>
+                       </tr></table></section><section id="search" class="content hidden"></section><section class="footer"></section><aside id="help" class="hidden"><div><h1 class="hidden">Help</h1><div class="shortcuts"><h2>Keyboard Shortcuts</h2><dl><dt><kbd>?</kbd></dt><dd>Show this help dialog</dd><dt><kbd>S</kbd></dt><dd>Focus the search field</dd><dt><kbd>↑</kbd></dt><dd>Move up in search results</dd><dt><kbd>↓</kbd></dt><dd>Move down in search results</dd><dt><kbd>↹</kbd></dt><dd>Switch tab</dd><dt><kbd>&#9166;</kbd></dt><dd>Go to active search result</dd><dt><kbd>+</kbd></dt><dd>Expand all sections</dd><dt><kbd>-</kbd></dt><dd>Collapse all sections</dd></dl></div><div class="infos"><h2>Search Tricks</h2><p>Prefix searches with a type followed by a colon (e.g. <code>fn:</code>) to restrict the search to a given type.</p><p>Accepted types are: <code>fn</code>, <code>mod</code>, <code>struct</code>, <code>enum</code>, <code>trait</code>, <code>type</code>, <code>macro</code>, and <code>const</code>.</p><p>Search functions by type signature (e.g. <code>vec -> usize</code> or <code>* -> vec</code>)</p><p>Search multiple things at once by splitting your query with comma (e.g. <code>str,u8</code> or <code>String,struct:Vec,test</code>)</p></div></div></aside><script>window.rootPath = "../";window.currentCrate = "please";</script><script src="../aliases.js"></script><script src="../main.js"></script><script defer src="../search-index.js"></script></body></html>
