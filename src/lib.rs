@@ -285,6 +285,24 @@ impl<P: ConnectionProvider> PleaseHandle<P> {
         Self::new(provider, title)
     }
 
+    /// Constructor to use from within an existing transaction.
+    /// 
+    /// Allows conditionally creating a handle without losing the atomicity
+    /// of a single transaction.
+    pub fn new_with_connection(provider: P, title: &str, conn: &P::Connection) -> PleaseResult<Self, P::Error> {
+        use self::schema::*;
+
+        let id = diesel::insert_into(please_ids::table)
+            .values(&please_ids::title.eq(title))
+            .returning(please_ids::id)
+            .get_result(conn)?;
+
+        Ok(PleaseHandle {
+            provider,
+            id,
+        })
+    }
+
     /// Explicitly clean up old handles. It is recommended to call this before
     /// creating a new handle.
     /// 
@@ -374,6 +392,12 @@ impl<P: ConnectionProvider> PleaseHandle<P> {
         self.id = -1;
         Ok(())
     }
+
+    /// Get the ID of this handle.
+    /// 
+    /// A good rule of thumb is to never use this outside of a transaction,
+    /// as in that case it may not have been recently validated.
+    pub fn id(&self) -> i32 { self.id }
 }
 
 impl<P: ConnectionProvider> Drop for PleaseHandle<P> {
@@ -412,9 +436,29 @@ mod tests {
             .expect("Failed to create handle")
     }
 
+    fn new_handle_with_connection(name: &str) -> PleaseHandle<TestConnectionProvider> {
+        let conn = TestConnectionProvider.get()
+            .expect("Failed to get connection");
+
+        conn.transaction(|| {
+            PleaseHandle::new_with_connection(TestConnectionProvider, name, &conn)
+        }).expect("Failed to run transaction")
+    }
+
     #[test]
     fn smoke() {
         let mut handle = new_handle("smoke");
+
+        handle.transaction(|_conn, _id| Ok::<(), PleaseError<_>>(()))
+            .expect("Failed to run no-op transaction");
+
+        handle.close()
+            .expect("Failed to close handle");
+    }
+
+    #[test]
+    fn smoke_with_connection() {
+        let mut handle = new_handle_with_connection("smoke");
 
         handle.transaction(|_conn, _id| Ok::<(), PleaseError<_>>(()))
             .expect("Failed to run no-op transaction");
