@@ -289,7 +289,7 @@ impl<P: ConnectionProvider> PleaseHandle<P> {
     /// 
     /// Allows conditionally creating a handle without losing the atomicity
     /// of a single transaction.
-    pub fn new_with_connection(provider: P, title: &str, conn: &P::Connection) -> PleaseResult<Self, P::Error> {
+    pub fn new_with_connection(provider: P, title: &str, conn: &P::Connection) -> QueryResult<Self> {
         use self::schema::*;
 
         let id = diesel::insert_into(please_ids::table)
